@@ -57,10 +57,17 @@ async function sendNotification(subject, text, attachmentPath = null) {
 async function runBooking() {
     console.log('Iniciando agente de reserva...', new Date().toLocaleString());
 
-    if (!fs.existsSync('screenshots')) {
-        fs.mkdirSync('screenshots');
+    // Crear directorio de screenshots/artefactos
+    const screenshotsDir = './screenshots';
+    if (!fs.existsSync(screenshotsDir)) {
+        fs.mkdirSync(screenshotsDir);
     }
-    // 1. VALIDACIÓN DE FECHA (Estrategia: Today + 7)
+
+    let browser = null;
+    let context = null;
+    let page = null;
+    let hadError = false; // Flag para saber si hubo un error crítico
+
     const today = new Date();
     const targetDate = new Date(today);
     targetDate.setDate(today.getDate() + CONFIG.daysOffset);
@@ -83,11 +90,14 @@ async function runBooking() {
         process.exit(1);
     }
 
-    const browser = await chromium.launch({ headless: CONFIG.headless });
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
     try {
+        browser = await chromium.launch({ headless: CONFIG.headless });
+        context = await browser.newContext();
+
+        // Iniciar Tracing para debugging avanzado
+        await context.tracing.start({ screenshots: true, snapshots: true });
+
+        page = await context.newPage();
         console.log('Navegando al login...');
         await page.goto('https://centrosdeportivos.lascondes.cl/login');
 
@@ -213,13 +223,37 @@ async function runBooking() {
             const errorShot = 'screenshots/error_debug.png';
             await page.screenshot({ path: errorShot });
             await sendNotification('Fallo en Reserva', `No se pudo reservar para el ${dateStr}.Error: ${err.message} `, errorShot);
+            throw err; // Re-lanzar para que vaya al catch principal y guarde traza
         }
 
     } catch (error) {
         console.error('Error CRÍTICO del agente:', error);
+
+        // Guardar HTML del estado actual si es posible
+        if (page) {
+            try {
+                const htmlPath = 'screenshots/error_state.html';
+                fs.writeFileSync(htmlPath, await page.content());
+                console.log('HTML de error guardado en', htmlPath);
+            } catch (e) { console.error('No se pudo guardar HTML:', e); }
+        }
+
+        // Guardar Traza de Playwright si es posible
+        if (context) {
+            try {
+                const tracePath = 'screenshots/trace.zip';
+                await context.tracing.stop({ path: tracePath });
+                console.log('Trace guardado en', tracePath);
+            } catch (e) { console.error('No se pudo guardar Trace:', e); }
+        }
+
         await sendNotification('Error Crítico Agente', `El script falló inesperadamente: ${error.message} `);
+        process.exit(1); // Asegurar fallo en CI
+
     } finally {
-        await browser.close();
+        if (browser) {
+            await browser.close();
+        }
         console.log('Proceso finalizado.');
     }
 }
