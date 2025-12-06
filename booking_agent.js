@@ -193,7 +193,7 @@ async function runBooking() {
 
         try {
             const result = await processDateBooking(dateStr);
-            const screenshotPath = `result_${dateStr}.png`;
+            const screenshotPath = `screenshots/result_${dateStr}.png`;
             await page.screenshot({ path: screenshotPath });
 
             if (result.status === 'SUCCESS') {
@@ -206,7 +206,7 @@ async function runBooking() {
 
         } catch (err) {
             console.error('❌ Fallo en intento de reserva:', err.message);
-            const errorShot = 'error_debug.png';
+            const errorShot = 'screenshots/error_debug.png';
             await page.screenshot({ path: errorShot });
             await sendNotification('Fallo en Reserva', `No se pudo reservar para el ${dateStr}.Error: ${err.message} `, errorShot);
         }
