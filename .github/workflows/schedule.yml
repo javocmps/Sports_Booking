@@ -1,0 +1,56 @@
+name: Sports Booking Agent
+
+on:
+  schedule:
+    # Ejecutar todos los días a las 00:05 UTC
+    # Nota: GitHub Actions usa UTC. Si Chile está en UTC-3 (verano) o UTC-4, ajusta aquí.
+    # 00:05 UTC son las 21:05 en Chile (Invierno) o 20:05 (Verano). 
+    # Para las 00:05 AM hora Chile, debes calcular el offset.
+    # Ej: Si quieres 00:05 Chile (UTC-3), en UTC son las 03:05.
+    - cron: '5 3 * * *'
+  
+  workflow_dispatch: # Permite ejecutar manualmente desde la pestaña Actions
+
+jobs:
+  run-booking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # Seguridad para no gastar minutos infinitos si se cuelga
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Instalar Dependencias
+      run: npm ci
+
+    - name: Instalar Navegadores Playwright
+      run: npx playwright install chromium --with-deps
+
+    - name: Ejecutar Agente
+      env:
+        # Estas variables deben configurarse en Settings -> Secrets and variables -> Actions
+        USER_EMAIL: ${{ secrets.USER_EMAIL }}
+        USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
+        FACILITY_NAME: ${{ secrets.FACILITY_NAME }}
+        SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
+        ALLOWED_DAYS: ${{ secrets.ALLOWED_DAYS }} # Opcional, o usar default code
+        ENABLE_EMAIL: ${{ secrets.ENABLE_EMAIL }}
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        HEADLESS: true
+      run: node booking_agent.js
+
+    - name: Subir Capturas de Pantalla (Artifacts)
+      if: always() # Subir incluso si falla el script
+      uses: actions/upload-artifact@v4
+      with:
+        name: screenshots
+        path: "*.png"
+        retention-days: 5
