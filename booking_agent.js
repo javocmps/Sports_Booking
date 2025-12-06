@@ -2,6 +2,7 @@
 const { chromium } = require('playwright');
 require('dotenv').config();
 const nodemailer = require('nodemailer');
+const fs = require('fs');
 
 const CONFIG = {
     email: process.env.USER_EMAIL,
@@ -56,6 +57,9 @@ async function sendNotification(subject, text, attachmentPath = null) {
 async function runBooking() {
     console.log('Iniciando agente de reserva...', new Date().toLocaleString());
 
+    if (!fs.existsSync('screenshots')) {
+        fs.mkdirSync('screenshots');
+    }
     // 1. VALIDACIÓN DE FECHA (Estrategia: Today + 7)
     const today = new Date();
     const targetDate = new Date(today);
