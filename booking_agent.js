@@ -9,12 +9,14 @@ const CONFIG = {
     targetTime: process.env.TARGET_TIME,
     facility: process.env.FACILITY_NAME,
     service: process.env.SERVICE_NAME,
+    daysOffset: parseInt(process.env.DAYS_OFFSET) || 7, // Default to 7 if not set
     allowedDays: (process.env.ALLOWED_DAYS || '2,3,5').split(',').map(Number),
     enableEmail: process.env.ENABLE_EMAIL === 'true',
     emailUser: process.env.EMAIL_USER,
     emailPass: process.env.EMAIL_PASS,
     emailTo: process.env.EMAIL_TO,
-    headless: process.env.HEADLESS !== 'false' // Default to true (cloud-ready) unless explicitly false
+    headless: process.env.HEADLESS !== 'false',
+    browserPath: process.env.BROWSER_PATH || null // Optional custom executable path
 };
 
 // Configuración de Transporte de Email
@@ -57,7 +59,7 @@ async function runBooking() {
     // 1. VALIDACIÓN DE FECHA (Estrategia: Today + 7)
     const today = new Date();
     const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + 7); // Regla de negocio: se abre con 1 semana de anticipación
+    targetDate.setDate(today.getDate() + CONFIG.daysOffset);
 
     const targetDayIndex = targetDate.getDay();
     const formatDate = (date) => date.toISOString().split('T')[0];
@@ -139,10 +141,13 @@ async function runBooking() {
             }
 
             // 2. Buscar Evento
-            const eventHandle = await page.evaluateHandle((date) => {
+            const eventHandle = await page.evaluateHandle(({ targetDateStr, CONFIG }) => {
                 const events = Array.from(document.querySelectorAll('.fc-day-grid-event'));
                 for (const ev of events) {
-                    if (!ev.innerText.includes('8 NATACIÓN') && !ev.innerText.includes('08:00')) continue;
+                    const eventText = ev.innerText;
+                    // Filter by Target Time if configured, otherwise accept any slot that might match logic
+                    // If CONFIG.targetTime is set (e.g. '19:00'), look for it.
+                    if (CONFIG.targetTime && !eventText.includes(CONFIG.targetTime)) continue;
 
                     // Match visual column logic or data-date logic similar to verified code
                     const row = ev.closest('.fc-row');
@@ -153,13 +158,13 @@ async function runBooking() {
                             if (eventTd) {
                                 let idx = eventTd.cellIndex;
                                 const dateCell = bgRow.children[idx];
-                                if (dateCell && dateCell.getAttribute('data-date') === date) return ev;
+                                if (dateCell && dateCell.getAttribute('data-date') === targetDateStr) return ev;
                             }
                         }
                     }
                 }
                 return null;
-            }, targetDateStr);
+            }, { targetDateStr, CONFIG });
 
             if (!eventHandle.asElement()) {
                 throw new Error(`No hay disponibilidad o evento '8 NATACIÓN' visible para el ${targetDateStr} `);
