@@ -102,10 +102,19 @@ async function runBooking() {
         await page.goto('https://centrosdeportivos.lascondes.cl/login');
 
         // Login Logic
-        await page.waitForSelector('#rut', { timeout: 10000 });
+        console.log('Esperando a que la página de login cargue completamente...');
+        await page.waitForLoadState('networkidle').catch(() => console.log('Network idle timeout, continuando...'));
+
+        console.log('Esperando campo RUT...');
+        await page.waitForSelector('#rut', { state: 'visible', timeout: 30000 });
+
         console.log('Ingresando credenciales...');
         await page.fill('#rut', CONFIG.email);
+
+        await page.waitForSelector('#password', { state: 'visible', timeout: 10000 });
         await page.fill('#password', CONFIG.password);
+
+        await page.waitForSelector('.btn--login', { state: 'visible', timeout: 10000 });
         await page.click('.btn--login');
 
         console.log('Esperando carga del dashboard...');
